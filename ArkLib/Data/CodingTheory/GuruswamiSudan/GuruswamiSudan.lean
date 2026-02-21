@@ -64,7 +64,7 @@ noncomputable opaque decoder (k r D e : ℕ) (ωs : Fin n ↪ F) (f : Fin n → 
   letI : Decidable (∃ Q, Condition k r D ωs f Q) := Classical.propDecidable _
   if h : ∃ Q, Condition k r D ωs f Q then
     let Q := Classical.choose h
-    (roots Q).toList.filter fun p ↦ p.natDegree < k ∧ Δ₀(f, p.eval ∘ ωs) ≤ e
+    (roots Q).toList.filter fun p ↦ p.degree < k ∧ Δ₀(f, p.eval ∘ ωs) ≤ e
   else
     []
 
