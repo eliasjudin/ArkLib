@@ -1,7 +1,7 @@
 /-
 Copyright (c) 2024-2025 ArkLib Contributors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: František Silváši, Ilia Vlasov
+Authors: František Silváši, Ilia Vlasov, Elias Judin
 -/
 import Mathlib.Algebra.Field.Basic
 import Mathlib.Algebra.Polynomial.Basic
@@ -53,8 +53,22 @@ structure Condition
   /-- Multiplicity of the roots is at least r. -/
   Q_multiplicity : ∀ i, r ≤ Bivariate.rootMultiplicity Q (ωs i) (f i)
 
-/-- Guruswami-Sudan decoder. -/
-opaque decoder (k r D e : ℕ) (ωs : Fin n ↪ F) (f : Fin n → F) : List F[X] := sorry
+/--
+Guruswami-Sudan decoder.
+
+If there exists a witness polynomial `Q` satisfying `Condition k r D ωs f Q`, the decoder
+returns the roots of `Q` filtered to degree `< k` and distance `≤ e` from `f`.
+If no such witness exists, it returns `[]`.
+-/
+noncomputable opaque decoder (k r D e : ℕ) (ωs : Fin n ↪ F) (f : Fin n → F) : List F[X] :=
+  by
+    classical
+    exact
+      if h : ∃ Q, Condition k r D ωs f Q then
+        let Q := Classical.choose h
+        (roots Q).toList.filter (fun p => p.natDegree < k ∧ Δ₀(f, p.eval ∘ ωs) ≤ e)
+      else
+        []
 
 /-- Each decoded codeword has to be e-far from the received message. -/
 theorem decoder_mem_impl_dist
