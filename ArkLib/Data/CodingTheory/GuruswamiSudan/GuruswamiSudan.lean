@@ -61,14 +61,12 @@ returns the roots of `Q` filtered to degree `< k` and distance `≤ e` from `f`.
 If no such witness exists, it returns `[]`.
 -/
 noncomputable opaque decoder (k r D e : ℕ) (ωs : Fin n ↪ F) (f : Fin n → F) : List F[X] :=
-  by
-    classical
-    exact
-      if h : ∃ Q, Condition k r D ωs f Q then
-        let Q := Classical.choose h
-        (roots Q).toList.filter (fun p => p.natDegree < k ∧ Δ₀(f, p.eval ∘ ωs) ≤ e)
-      else
-        []
+  letI : Decidable (∃ Q, Condition k r D ωs f Q) := Classical.propDecidable _
+  if h : ∃ Q, Condition k r D ωs f Q then
+    let Q := Classical.choose h
+    (roots Q).toList.filter fun p ↦ p.natDegree < k ∧ Δ₀(f, p.eval ∘ ωs) ≤ e
+  else
+    []
 
 /-- Each decoded codeword has to be e-far from the received message. -/
 theorem decoder_mem_impl_dist
