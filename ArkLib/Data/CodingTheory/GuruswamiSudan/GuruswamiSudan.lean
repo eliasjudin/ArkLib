@@ -60,7 +60,7 @@ If there exists a witness polynomial `Q` satisfying `Condition k r D ωs f Q`, t
 returns the roots of `Q` filtered to degree `< k` and distance `≤ e` from `f`.
 If no such witness exists, it returns `[]`.
 -/
-noncomputable opaque decoder (k r D e : ℕ) (ωs : Fin n ↪ F) (f : Fin n → F) : List F[X] :=
+noncomputable def decoder (k r D e : ℕ) (ωs : Fin n ↪ F) (f : Fin n → F) : List F[X] :=
   letI : Decidable (∃ Q, Condition k r D ωs f Q) := Classical.propDecidable _
   if h : ∃ Q, Condition k r D ωs f Q then
     let Q := Classical.choose h
@@ -77,7 +77,12 @@ theorem decoder_mem_impl_dist
   {p : F[X]}
   (h_in : p ∈ decoder k r D e ωs f)
   :
-  Δ₀(f, p.eval ∘ ωs) ≤ e := by sorry
+  Δ₀(f, p.eval ∘ ωs) ≤ e := by
+  unfold decoder at h_in
+  split at h_in
+  · rw [List.mem_filter] at h_in
+    exact (decide_eq_true_eq.mp h_in.2).2
+  · exact absurd h_in (List.not_mem_nil)
 
 /-- If a codeword is e-far from the received message it appears in the output of
 the decoder.
