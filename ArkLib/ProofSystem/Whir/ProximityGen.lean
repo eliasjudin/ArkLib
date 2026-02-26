@@ -89,7 +89,7 @@ variable {F : Type} [Field F] [Fintype F] [DecidableEq F]
 
 /- Theorem 4.8 [BCIKS20] Proximity Gap Theorem
   Smooth Reed Solomon codes C:= RSC[F,ι,m] have proximity generators for any given `parℓ`
-   with generator function Gen(parℓ) : 𝔽 → parℓ → 𝔽; α → (1,α, α², …, α^{parℓ - 1}),
+   with generator function Gen(parℓ) : 𝔽 → parℓ → 𝔽 ; α → (1,α, α², …, α^{parℓ - 1}),
    B(C,parℓ) := √ρ
    err(C,parℓ,δ) :=  (parℓ-1)2ᵐ / ρ * |F| for δ in (0, (1-ρ)/2]
                      (parℓ-1)*2²ᵐ / (|F|(2 min{1-√ρ-δ, √ρ/20})⁷)

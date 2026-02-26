@@ -69,7 +69,7 @@ lemma e_ball_le_radius [Field F] [Fintype F] {B : Finset (Fin n → F)} (v : Fin
   unfold e
   have hamming_symm : ∀ x y : Fin n → F, Δ₀(x, y) = Δ₀(y, x) := by
     unfold hammingDist
-    simp_rw [ne_comm]; simp
+    simp_rw [ne_comm] ; simp
   simp_rw[hamming_symm v]
   have : ∑ x ∈ (B ∩ ({x | ↑Δ₀(x, v) ≤ r} : Finset _)), Δ₀(x, v)
      ≤ ∑ x ∈ (B ∩ ({x | ↑Δ₀(x, v) ≤ r} : Finset _)), r := by
@@ -78,7 +78,7 @@ lemma e_ball_le_radius [Field F] [Fintype F] {B : Finset (Fin n → F)} (v : Fin
     exact_mod_cast Finset.sum_le_sum h
   have : ∑ x ∈ (B ∩ ({x | ↑Δ₀(x, v) ≤ r} : Finset _)), r
     = r * (B ∩ ({x | ↑Δ₀(x, v) ≤ r} : Finset _)).card := by
-    rw [Finset.sum_const, mul_comm]; simp
+    rw [Finset.sum_const, mul_comm] ; simp
   have : ∑ x ∈ B ∩ ({x | ↑Δ₀(x, v) ≤ r} : Finset _), Δ₀(x, v)
     ≤ r * (B ∩ ({x | ↑Δ₀(x, v) ≤ r} : Finset _)).card := by grind only
   field_simp
@@ -125,8 +125,8 @@ lemma min_dist_le_d [Field F] {B : Finset (Fin n → F)}
       exact Finset.one_lt_card.mp h_B
     have ⟨u, hu, v, hv, huv⟩ := Finset.one_lt_card.mp h_B
     have : {x ∈ B.product B | x.1 ≠ x.2}.Nonempty := by
-        use ⟨u, v⟩; simp [hu, hv, huv]
-    apply Finset.card_pos.mpr; exact this
+        use ⟨u, v⟩ ; simp [hu, hv, huv]
+    apply Finset.card_pos.mpr ; exact this
   have h_bound : ∑ x ∈ B.product B with x.1 ≠ x.2, d_weak ≤
     ∑ x ∈ B.product B with x.1 ≠ x.2, Δ₀(x.1, x.2) := by
       exact Finset.sum_le_sum h_d
@@ -136,7 +136,7 @@ lemma min_dist_le_d [Field F] {B : Finset (Fin n → F)}
     simp only [ne_eq, Finset.product_eq_sprod, one_div, smul_eq_mul, Nat.cast_mul]
     rw[←mul_assoc]
     set c := ({x ∈ B ×ˢ B | ¬x.1 = x.2}.card : ℚ) with hc
-    have c_nonzero : c > 0 := by unfold c; exact_mod_cast B2_card_pos
+    have c_nonzero : c > 0 := by unfold c ; exact_mod_cast B2_card_pos
     field_simp [c_nonzero]
   rw[this]
   have h_B2nonzero : 0 < (2 * choose_2 ↑B.card : ℚ) := by rw[B2_card]; exact_mod_cast B2_card_pos
