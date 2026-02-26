@@ -217,7 +217,7 @@ lemma johnson_condition_weak_implies_strong [Field F]
           have : ∀ x ∈ B ∩ ({x | Δ₀(x, v) ≤ e} : Finset _), Δ₀(v, x) ≤ e := by
             unfold hammingDist
             simp
-            (simp_rw [eq_comm] ; grind)
+            (simp_rw [eq_comm]; grind)
           have sum_bound :=
             Finset.sum_le_card_nsmul (B ∩ ({x | Δ₀(x, v) ≤ e} : Finset _))
               (fun x => Δ₀(v, x)) e this

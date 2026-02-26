@@ -44,11 +44,11 @@ theorem singleEqPolynomial_symm (r : R) (s : R) :
 
 @[simp]
 theorem singleEqPolynomial_zero (x : MvPolynomial σ R) : singleEqPolynomial (0 : R) x = 1 - x := by
-  unfold singleEqPolynomial ; simp
+  unfold singleEqPolynomial; simp
 
 @[simp]
 theorem singleEqPolynomial_one (x : MvPolynomial σ R) : singleEqPolynomial (1 : R) x = x := by
-  unfold singleEqPolynomial ; simp
+  unfold singleEqPolynomial; simp
 
 -- @[simp]
 theorem singleEqPolynomial_zeroOne (r : Fin 2) (x : MvPolynomial σ R) :
@@ -81,17 +81,17 @@ theorem eqPolynomial_expanded (r : σ → R) :
 
 theorem eqPolynomial_symm (x : σ → R) (y : σ → R) :
     MvPolynomial.eval y (eqPolynomial x) = MvPolynomial.eval x (eqPolynomial y) := by
-  simp [eqPolynomial_expanded] ; congr ; funext ; ring_nf
+  simp [eqPolynomial_expanded]; congr; funext; ring_nf
 
 -- @[simp]
 theorem eqPolynomial_zeroOne (r : σ → Fin 2) : (eqPolynomial r : MvPolynomial σ R) =
     ∏ i : σ, if r i = 0 then 1 - X i else X i := by
-  unfold eqPolynomial ; congr ; funext i ; simp [singleEqPolynomial_zeroOne]
+  unfold eqPolynomial; congr; funext i; simp [singleEqPolynomial_zeroOne]
 
 @[simp]
 theorem eqPolynomial_eval_zeroOne (r x : σ → Fin 2) :
     eval (x : σ → R) (eqPolynomial r) = if x = r then 1 else 0 := by
-  unfold eqPolynomial ; simp
+  unfold eqPolynomial; simp
   by_cases h : x = r
   · simp [h]
     have (i : Fin 2) : (1 - (i : R)) * (1 - (i : R)) + i * i = 1 := by
@@ -121,7 +121,7 @@ def MLE' {n : ℕ} (evals : Fin (2 ^ n) → R) : MvPolynomial (Fin n) R :=
 theorem MLE_expanded (evals : (σ → Fin 2) → R) : MLE evals =
     ∑ x : σ → Fin 2, (∏ i : σ, ((1 - C (x i : R)) * (1 - X i) + C (x i : R) * X i))
       * C (evals x) := by
-  unfold MLE ; congr
+  unfold MLE; congr
 
 @[simp]
 theorem MLE_eval_zeroOne (x : σ → Fin 2) (evals : (σ → Fin 2) → R) :
@@ -231,7 +231,7 @@ theorem is_multilinear_iff_eq_evals_zeroOne {p : MvPolynomial σ R} :
   constructor <;> intro h
   · refine (is_multilinear_eq_iff_eq_evals_zeroOne (MLE p.toEvalsZeroOne) p
       (MLE_mem_restrictDegree p.toEvalsZeroOne) h).mpr ?_
-    unfold toEvalsZeroOne ; simp only [MLE_eval_zeroOne]
+    unfold toEvalsZeroOne; simp only [MLE_eval_zeroOne]
   · rw [←h]
     exact MLE_mem_restrictDegree p.toEvalsZeroOne
 
