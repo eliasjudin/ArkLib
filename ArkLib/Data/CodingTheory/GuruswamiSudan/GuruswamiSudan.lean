@@ -125,29 +125,6 @@ private lemma mem_fallbackCandidates_iff [Fintype F] {k e : ℕ} {ωs : Fin n �
   simp only [fallbackCandidates, Finset.mem_filter, decide_eq_true_eq,
     mem_polynomialsDegreeLT]
 
-/-- Bounded root candidates from an explicit `Q`, restricted to degree `< k` and distance `≤ e`. -/
-private noncomputable def boundedRootCandidates [Fintype F] (Q : F[X][X]) (k e : ℕ)
-    (ωs : Fin n ↪ F) (f : Fin n → F) : Finset F[X] :=
-  (polynomialsDegreeLT F k).filter fun p ↦
-    decide (Q.eval p = 0 ∧ Δ₀(f, p.eval ∘ ωs) ≤ e)
-
-/-- Membership characterization for `boundedRootCandidates`. -/
-private lemma mem_boundedRootCandidates_iff [Fintype F] {Q : F[X][X]} {k e : ℕ}
-    {ωs : Fin n ↪ F} {f : Fin n → F} {p : F[X]} :
-    p ∈ boundedRootCandidates Q k e ωs f ↔
-    (p.degree < k ∧ Q.eval p = 0 ∧ Δ₀(f, p.eval ∘ ωs) ≤ e) := by
-  simp only [boundedRootCandidates, Finset.mem_filter, decide_eq_true_eq,
-    mem_polynomialsDegreeLT]
-
-/-- Every bounded-root candidate is a fallback candidate. -/
-private lemma boundedRootCandidates_subset_fallbackCandidates [Fintype F]
-    {Q : F[X][X]} {k e : ℕ} {ωs : Fin n ↪ F} {f : Fin n → F} :
-    boundedRootCandidates Q k e ωs f ⊆ fallbackCandidates k e ωs f := by
-  intro p hp
-  rw [mem_boundedRootCandidates_iff] at hp
-  rw [mem_fallbackCandidates_iff]
-  exact ⟨hp.1, hp.2.2⟩
-
 /-- Membership characterization for the decoder: a polynomial belongs to the output
     if and only if it has degree `< k` and distance `≤ e` from `f`. -/
 private lemma mem_decoder_iff [Fintype F] {k r D e : ℕ} {ωs : Fin n ↪ F} {f : Fin n → F}
