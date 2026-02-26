@@ -69,7 +69,8 @@ private lemma polynomialOfCoeffs_coeffsOfPolynomial_of_degree_lt
       (lt_of_lt_of_le h (by exact_mod_cast Nat.le_of_not_lt ‹_›))
 
 /-- The finset of all polynomials `p : F[X]` with `p.degree < k`, viewed as elements of `F[X]`.
-    Constructed computably by enumerating coefficient vectors `Fin k → F`. -/
+    Constructed computably by enumerating coefficient vectors `Fin k → F`.
+    Note that this always includes `0`, since `(0 : F[X]).degree = ⊥ < (k : WithBot ℕ)`. -/
 def polynomialsDegreeLT (F : Type) [CommSemiring F] [Fintype F]
     [DecidableEq F] (k : ℕ) :
     Finset F[X] :=
@@ -86,45 +87,31 @@ lemma mem_polynomialsDegreeLT {F : Type} [CommSemiring F] [Fintype F] [Decidable
     exact ⟨coeffsOfPolynomial p, polynomialOfCoeffs_coeffsOfPolynomial_of_degree_lt h⟩
 
 /--
-Guruswami-Sudan decoder.
+Guruswami–Sudan decoder.
 
-**Definition.** This definition is **noncomputable**: it uses `Classical.propDecidable` to
-decide existence of a witness `Q`, `Classical.choose` to pick one, and (in the fallback
-branch) finite enumeration of `Polynomial.degreeLT F k` followed by filtering.
+**Definition.** The decoder enumerates all polynomials of degree `< k` over the
+finite field `F` and returns the finset of those whose Hamming distance from the
+received word `f` is at most `e`. The implementation is fully computable and
+avoids `Classical.choose`, `Classical.propDecidable`, and `Polynomial.roots`.
 
-If there exists a witness polynomial `Q` satisfying `Condition k r D ωs f Q`, the decoder
-returns the roots of `Q` filtered to degree `< k` and distance `≤ e` from `f`, together
-with the fallback list of all polynomials of degree `< k` with distance `≤ e`.
-If no such witness exists, it returns the fallback list directly.
+The output is complete: a polynomial belongs to the returned `Finset` if and
+only if it has degree `< k` and Hamming distance `≤ e` from `f`.
 
-Including the fallback list in both branches ensures completeness: any polynomial with
-degree `< k` and distance `≤ e` always appears in the output, regardless of whether a
-witness `Q` exists. When a witness does exist, the GS roots provide the algorithmically
-meaningful part of the output.
+The parameters `r` and `D` are retained in the signature for compatibility with
+the Guruswami–Sudan interpolation/root-extraction pipeline; they are not used by
+the current brute-force implementation.
 
 **Future computability outline:**
-1. When a witness `Q` exists, a constructive algorithm (e.g. linear algebra over `F` or
-   infrastructure from `CompPoly`) can be used to compute `Q` and extract its roots,
-   replacing `Classical.choose`.
-2. For finite `F`, the fallback branch can be made computable by explicitly enumerating
-   `Polynomial.degreeLT F k` (which is `Fintype` via `degreeLTEquiv`) and filtering by
-   distance. `CompPoly` may provide computable polynomial and finite-field infrastructure
-   to support this.
-3. `CompPoly` may also provide computable polynomial arithmetic (evaluation, GCD,
-   factoring) needed to make the root-extraction step constructive.
+When a constructive algorithm for computing a Guruswami–Sudan witness `Q` and
+extracting its roots is available (e.g. via `CompPoly`), the brute-force
+enumeration can be replaced by root extraction from `Q`, preserving the same
+interface.
 -/
-noncomputable def decoder [Fintype F] (k r D e : ℕ) (ωs : Fin n ↪ F) (f : Fin n → F) :
-    List F[X] :=
-  -- Fallback: all polynomials of degree < k with distance ≤ e from f.
-  let fallback :=
-    ((polynomialsDegreeLT F k).filter fun p ↦
-      decide (Δ₀(f, p.eval ∘ ωs) ≤ e)).toList
-  letI : Decidable (∃ Q, Condition k r D ωs f Q) := Classical.propDecidable _
-  if h : ∃ Q, Condition k r D ωs f Q then
-    let Q := Classical.choose h
-    (roots Q).toList.filter (fun p ↦ decide (p.natDegree < k ∧ Δ₀(f, p.eval ∘ ωs) ≤ e)) ++ fallback
-  else
-    fallback
+def decoder [Fintype F] (k r D e : ℕ) (ωs : Fin n ↪ F) (f : Fin n → F) :
+    Finset F[X] :=
+  let _r := r; let _D := D  -- retained for GS pipeline compatibility
+  (polynomialsDegreeLT F k).filter fun p ↦
+    decide (Δ₀(f, p.eval ∘ ωs) ≤ e)
 
 /-- Computable fallback candidates: degree `< k` and distance `≤ e` from `f`. -/
 private def fallbackCandidates [Fintype F] (k e : ℕ) (ωs : Fin n ↪ F) (f : Fin n → F) :
@@ -161,37 +148,25 @@ private lemma boundedRootCandidates_subset_fallbackCandidates [Fintype F]
   rw [mem_fallbackCandidates_iff]
   exact ⟨hp.1, hp.2.2⟩
 
-/-- A polynomial appears in the fallback list if and only if it has degree `< k` and
-    distance `≤ e` from `f`. -/
-private lemma mem_fallback_iff [Fintype F] {k e : ℕ} {ωs : Fin n ↪ F} {f : Fin n → F}
+/-- Membership characterization for the decoder: a polynomial belongs to the output
+    if and only if it has degree `< k` and distance `≤ e` from `f`. -/
+private lemma mem_decoder_iff [Fintype F] {k r D e : ℕ} {ωs : Fin n ↪ F} {f : Fin n → F}
     {p : F[X]} :
-    p ∈ ((polynomialsDegreeLT F k).filter fun p ↦
-      decide (Δ₀(f, p.eval ∘ ωs) ≤ e)).toList ↔
-    (p.degree < k ∧ Δ₀(f, p.eval ∘ ωs) ≤ e) := by
-  simp only [Finset.mem_toList, Finset.mem_filter, decide_eq_true_eq,
-    mem_polynomialsDegreeLT]
+    p ∈ decoder k r D e ωs f ↔ (p.degree < k ∧ Δ₀(f, p.eval ∘ ωs) ≤ e) := by
+  simp only [decoder, Finset.mem_filter, decide_eq_true_eq, mem_polynomialsDegreeLT]
 
 /-- Each decoded codeword has to be e-far from the received message. -/
 theorem decoder_mem_impl_dist
   [Fintype F]
   {k r D e : ℕ}
-  (h_e : e ≤ n - Real.sqrt (k * n))
+  (_h_e : e ≤ n - Real.sqrt (k * n))
   {ωs : Fin n ↪ F}
   {f : Fin n → F}
   {p : F[X]}
   (h_in : p ∈ decoder k r D e ωs f)
   :
   Δ₀(f, p.eval ∘ ωs) ≤ e := by
-  unfold decoder at h_in
-  split at h_in
-  · -- if branch: p ∈ gs_roots ++ fallback
-    rw [List.mem_append] at h_in
-    rcases h_in with h_gs | h_fb
-    · rw [List.mem_filter] at h_gs
-      exact (decide_eq_true_eq.mp h_gs.2).2
-    · exact (mem_fallback_iff.mp h_fb).2
-  · -- else branch: p ∈ fallback
-    exact (mem_fallback_iff.mp h_in).2
+  exact (mem_decoder_iff.mp h_in).2
 
 /-- If a codeword has degree `< k` and is e-close to the received message, it appears in
 the output of the decoder.
@@ -199,7 +174,7 @@ the output of the decoder.
 theorem decoder_dist_impl_mem
   [Fintype F]
   {k r D e : ℕ}
-  (h_e : e ≤ n - Real.sqrt (k * n))
+  (_h_e : e ≤ n - Real.sqrt (k * n))
   {ωs : Fin n ↪ F}
   {f : Fin n → F}
   {p : F[X]}
@@ -207,13 +182,7 @@ theorem decoder_dist_impl_mem
   (h_dist : Δ₀(f, p.eval ∘ ωs) ≤ e)
   :
   p ∈ decoder k r D e ωs f := by
-  show p ∈ decoder k r D e ωs f
-  unfold decoder
-  dsimp only
-  split
-  · rw [List.mem_append]; right
-    exact mem_fallback_iff.mpr ⟨h_deg, h_dist⟩
-  · exact mem_fallback_iff.mpr ⟨h_deg, h_dist⟩
+  exact mem_decoder_iff.mpr ⟨h_deg, h_dist⟩
 
 /-- The degree bound (a.k.a. `D_X`) for instantiation of Guruswami-Sudan
     in lemma 5.3 of [BCIKS20].
