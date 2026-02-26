@@ -13,6 +13,8 @@ import ArkLib.Data.CodingTheory.ReedSolomon
 import ArkLib.Data.Polynomial.Bivariate
 import ArkLib.Data.Polynomial.Interface
 
+import CompPoly.Univariate.Lagrange
+
 namespace GuruswamiSudan
 
 variable {F : Type} [Field F]
@@ -86,20 +88,103 @@ lemma mem_polynomialsDegreeLT {F : Type} [CommSemiring F] [Fintype F] [Decidable
   · intro h
     exact ⟨coeffsOfPolynomial p, polynomialOfCoeffs_coeffsOfPolynomial_of_degree_lt h⟩
 
+/-! ## CompPoly-based interpolation candidate
+
+The following private helpers use CompPoly's computable `CPolynomial.Raw` type to build a
+Lagrange interpolation candidate from the first `k` evaluation points. The result is
+converted back to Mathlib's `Polynomial F` via coefficient extraction (`polynomialOfCoeffs`),
+which is fully computable.
+
+**Limitation:** The correctness bridge (`CPolynomial.Raw.toPoly`) is `noncomputable` in
+CompPoly, so we cannot yet *prove* that the `Raw` polynomial agrees with its `Polynomial`
+image inside a computable context. We therefore validate the candidate empirically
+(degree < k, distance ≤ e) before including it in the decoder output. The fallback
+brute-force enumeration guarantees completeness regardless.
+-/
+
+/-- General Lagrange interpolation over arbitrary evaluation points, computed using
+    CompPoly's `CPolynomial.Raw` arithmetic.
+
+    Given `m` evaluation points and corresponding values, builds the unique polynomial
+    of degree `< m` interpolating those values (assuming distinct points).
+    Fully computable: no `Classical.choose`, `Polynomial.roots`, or `noncomputable` terms. -/
+private def lagrangeInterpolateRaw (m : ℕ) (points : Fin m → F) (values : Fin m → F) :
+    CompPoly.CPolynomial.Raw F :=
+  (List.finRange m).foldl (fun acc i =>
+    let basis := (List.finRange m).foldl (fun b j =>
+      if i = j then b
+      else b.mul (CompPoly.CPolynomial.Raw.X - CompPoly.CPolynomial.Raw.C (points j))
+    ) (CompPoly.CPolynomial.Raw.C 1)
+    let denom := (List.finRange m).foldl (fun d j =>
+      if i = j then d
+      else d * (points i - points j)
+    ) 1
+    acc + CompPoly.CPolynomial.Raw.smul (values i * denom⁻¹) basis
+  ) 0
+
+/-- Convert a `CPolynomial.Raw` to `Polynomial F` by extracting the first `bound` coefficients.
+    Fully computable; the result always has `degree < bound`. -/
+private def rawToPolyBounded (raw : CompPoly.CPolynomial.Raw F) (bound : ℕ) : F[X] :=
+  polynomialOfCoeffs (fun i : Fin bound => raw.coeff i.val)
+
+/-- Build an interpolation candidate from the first `min k n` evaluation points.
+    Returns `none` when `k = 0` (no meaningful interpolation).
+    The result, when `some`, has `degree < k` by construction of `rawToPolyBounded`. -/
+private def compPolyCandidate [Fintype F] (k : ℕ) (ωs : Fin n ↪ F) (f : Fin n → F) :
+    Option F[X] :=
+  if k = 0 then none
+  else
+    let m := min k n
+    if _hm : m = 0 then none
+    else
+      let points : Fin m → F := fun i => ωs (Fin.castLE (Nat.min_le_right k n) i)
+      let values : Fin m → F := fun i => f (Fin.castLE (Nat.min_le_right k n) i)
+      let raw := lagrangeInterpolateRaw m points values
+      some (rawToPolyBounded raw k)
+
+/-- The `Finset` of CompPoly interpolation candidates that pass the degree and distance check.
+    Always a subset of `{p | p.degree < k ∧ Δ₀(f, p.eval ∘ ωs) ≤ e}`. -/
+private def compPolyCandidateSet [Fintype F] (k e : ℕ) (ωs : Fin n ↪ F) (f : Fin n → F) :
+    Finset F[X] :=
+  match compPolyCandidate k ωs f with
+  | some p =>
+    if decide (p.degree < (k : WithBot ℕ) ∧ Δ₀(f, p.eval ∘ ωs) ≤ e) then {p} else ∅
+  | none => ∅
+
+/-- Every element of `compPolyCandidateSet` has degree `< k` and distance `≤ e`. -/
+private lemma mem_compPolyCandidateSet_imp [Fintype F] {k e : ℕ} {ωs : Fin n ↪ F}
+    {f : Fin n → F} {p : F[X]} (hp : p ∈ compPolyCandidateSet k e ωs f) :
+    p.degree < k ∧ Δ₀(f, p.eval ∘ ωs) ≤ e := by
+  simp only [compPolyCandidateSet] at hp
+  split at hp
+  · next h =>
+    split at hp
+    · next hcond =>
+      rw [Finset.mem_singleton.mp hp]
+      exact decide_eq_true_eq.mp hcond
+    · simp at hp
+  · simp at hp
+
 /--
 Guruswami–Sudan decoder.
 
-**Definition.** The decoder enumerates all polynomials of degree `< k` over the
-finite field `F` and returns the finset of those whose Hamming distance from the
-received word `f` is at most `e`. The implementation is fully computable and
-avoids `Classical.choose`, `Classical.propDecidable`, and `Polynomial.roots`.
+**Definition.** The decoder returns the finset of all polynomials of degree `< k` over
+the finite field `F` whose Hamming distance from the received word `f` is at most `e`.
+
+The implementation first consults a CompPoly-based Lagrange interpolation candidate
+(from the first `min k n` evaluation points) and includes it if it satisfies the
+degree and distance bounds. It then takes the union with a complete brute-force
+enumeration, ensuring that no valid codeword is missed.
+
+The implementation is fully computable and avoids `Classical.choose`,
+`Classical.propDecidable`, and `Polynomial.roots`.
 
 The output is complete: a polynomial belongs to the returned `Finset` if and
 only if it has degree `< k` and Hamming distance `≤ e` from `f`.
 
 The parameters `r` and `D` are retained in the signature for compatibility with
 the Guruswami–Sudan interpolation/root-extraction pipeline; they are not used by
-the current brute-force implementation.
+the current implementation.
 
 **Future computability outline:**
 When a constructive algorithm for computing a Guruswami–Sudan witness `Q` and
@@ -110,8 +195,10 @@ interface.
 def decoder [Fintype F] (k r D e : ℕ) (ωs : Fin n ↪ F) (f : Fin n → F) :
     Finset F[X] :=
   let _r := r; let _D := D  -- retained for GS pipeline compatibility
-  (polynomialsDegreeLT F k).filter fun p ↦
+  let fallback := (polynomialsDegreeLT F k).filter fun p ↦
     decide (Δ₀(f, p.eval ∘ ωs) ≤ e)
+  -- Prepend CompPoly interpolation candidate if it passes validation
+  compPolyCandidateSet k e ωs f ∪ fallback
 
 /-- Computable fallback candidates: degree `< k` and distance `≤ e` from `f`. -/
 private def fallbackCandidates [Fintype F] (k e : ℕ) (ωs : Fin n ↪ F) (f : Fin n → F) :
@@ -130,7 +217,15 @@ private lemma mem_fallbackCandidates_iff [Fintype F] {k e : ℕ} {ωs : Fin n �
 private lemma mem_decoder_iff [Fintype F] {k r D e : ℕ} {ωs : Fin n ↪ F} {f : Fin n → F}
     {p : F[X]} :
     p ∈ decoder k r D e ωs f ↔ (p.degree < k ∧ Δ₀(f, p.eval ∘ ωs) ≤ e) := by
-  simp only [decoder, Finset.mem_filter, decide_eq_true_eq, mem_polynomialsDegreeLT]
+  simp only [decoder, Finset.mem_union, Finset.mem_filter, decide_eq_true_eq,
+    mem_polynomialsDegreeLT]
+  constructor
+  · rintro (h | ⟨h1, h2⟩)
+    · exact mem_compPolyCandidateSet_imp h
+    · exact ⟨h1, h2⟩
+  · intro ⟨h1, h2⟩
+    right
+    exact ⟨h1, h2⟩
 
 /-- Each decoded codeword has to be e-far from the received message. -/
 theorem decoder_mem_impl_dist
