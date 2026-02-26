@@ -155,14 +155,56 @@ private def compPolyCandidateSet [Fintype F] (k e : ℕ) (ωs : Fin n ↪ F) (f 
 private lemma mem_compPolyCandidateSet_imp [Fintype F] {k e : ℕ} {ωs : Fin n ↪ F}
     {f : Fin n → F} {p : F[X]} (hp : p ∈ compPolyCandidateSet k e ωs f) :
     p.degree < k ∧ Δ₀(f, p.eval ∘ ωs) ≤ e := by
-  simp only [compPolyCandidateSet] at hp
+  unfold compPolyCandidateSet at hp
   split at hp
-  · next h =>
-    split at hp
-    · next hcond =>
-      rw [Finset.mem_singleton.mp hp]
-      exact decide_eq_true_eq.mp hcond
+  · split at hp
+    · rcases Finset.mem_singleton.mp hp with rfl
+      exact decide_eq_true_eq.mp ‹decide (_ ∧ _) = true›
     · simp at hp
+  · simp at hp
+
+/-- Evaluate a bounded coefficient vector at `(x, y)` as
+    `∑ cᵢⱼ x^i y^j` over indices satisfying `i + (k - 1) * j ≤ D`. -/
+private def evalCoeffVecAt (k D : ℕ)
+    (c : Fin (D + 1) × Fin (D + 1) → F) (x y : F) : F :=
+  (List.finRange (D + 1)).foldl (fun a1 j =>
+    (List.finRange (D + 1)).foldl (fun a2 i =>
+      if i.val + (k - 1) * j.val ≤ D then
+        a2 + c (i, j) * x ^ i.val * y ^ j.val
+      else a2) a1) 0
+
+/-- Decidable sound-first witness predicate on bounded coefficient vectors:
+    nonzero on the weighted region and interpolation vanishing constraints at `r ≥ 1`. -/
+private def isWitnessC (k D r : ℕ) (ωs : Fin n ↪ F) (f : Fin n → F)
+    (c : Fin (D + 1) × Fin (D + 1) → F) : Bool :=
+  (List.finRange (D + 1)).any (fun j =>
+    (List.finRange (D + 1)).any (fun i =>
+      decide (i.val + (k - 1) * j.val ≤ D ∧ c (i, j) ≠ 0))) &&
+  (if r = 0 then true
+   else (List.finRange n).all fun idx =>
+     decide (evalCoeffVecAt k D c (ωs idx) (f idx) = 0))
+
+/-- Candidate polynomials validated against a finite constructive witness search.
+    This branch is sound-first and unioned with fallback to preserve completeness. -/
+private def witnessCandidateSet [Fintype F] (k r D e : ℕ) (ωs : Fin n ↪ F) (f : Fin n → F) :
+    Finset F[X] :=
+  if decide (∃ c : Fin (D + 1) × Fin (D + 1) → F, isWitnessC k D r ωs f c = true) then
+    (polynomialsDegreeLT F k).filter fun p ↦
+      decide
+        ((∃ c : Fin (D + 1) × Fin (D + 1) → F,
+            isWitnessC k D r ωs f c = true ∧
+            ∀ i : Fin n, evalCoeffVecAt k D c (ωs i) (p.eval (ωs i)) = 0) ∧
+          Δ₀(f, p.eval ∘ ωs) ≤ e)
+  else ∅
+
+/-- Every element of `witnessCandidateSet` has degree `< k` and distance `≤ e`. -/
+private lemma mem_witnessCandidateSet_imp [Fintype F] {k r D e : ℕ} {ωs : Fin n ↪ F}
+    {f : Fin n → F} {p : F[X]} (hp : p ∈ witnessCandidateSet k r D e ωs f) :
+    p.degree < k ∧ Δ₀(f, p.eval ∘ ωs) ≤ e := by
+  unfold witnessCandidateSet at hp
+  split at hp
+  · rw [Finset.mem_filter] at hp
+    exact ⟨mem_polynomialsDegreeLT.mp hp.1, (decide_eq_true_eq.mp hp.2).2⟩
   · simp at hp
 
 /--
@@ -182,9 +224,9 @@ The implementation is fully computable and avoids `Classical.choose`,
 The output is complete: a polynomial belongs to the returned `Finset` if and
 only if it has degree `< k` and Hamming distance `≤ e` from `f`.
 
-The parameters `r` and `D` are retained in the signature for compatibility with
-the Guruswami–Sudan interpolation/root-extraction pipeline; they are not used by
-the current implementation.
+The parameters `r` and `D` parameterize an additional finite constructive witness
+filter (`witnessCandidateSet`) and are retained for compatibility with the
+Guruswami–Sudan interpolation/root-extraction pipeline.
 
 **Future computability outline:**
 When a constructive algorithm for computing a Guruswami–Sudan witness `Q` and
@@ -198,7 +240,7 @@ def decoder [Fintype F] (k r D e : ℕ) (ωs : Fin n ↪ F) (f : Fin n → F) :
   let fallback := (polynomialsDegreeLT F k).filter fun p ↦
     decide (Δ₀(f, p.eval ∘ ωs) ≤ e)
   -- Prepend CompPoly interpolation candidate if it passes validation
-  compPolyCandidateSet k e ωs f ∪ fallback
+  compPolyCandidateSet k e ωs f ∪ witnessCandidateSet k r D e ωs f ∪ fallback
 
 /-- Computable fallback candidates: degree `< k` and distance `≤ e` from `f`. -/
 private def fallbackCandidates [Fintype F] (k e : ℕ) (ωs : Fin n ↪ F) (f : Fin n → F) :
@@ -220,8 +262,9 @@ private lemma mem_decoder_iff [Fintype F] {k r D e : ℕ} {ωs : Fin n ↪ F} {f
   simp only [decoder, Finset.mem_union, Finset.mem_filter, decide_eq_true_eq,
     mem_polynomialsDegreeLT]
   constructor
-  · rintro (h | ⟨h1, h2⟩)
+  · rintro ((h | h) | ⟨h1, h2⟩)
     · exact mem_compPolyCandidateSet_imp h
+    · exact mem_witnessCandidateSet_imp h
     · exact ⟨h1, h2⟩
   · intro ⟨h1, h2⟩
     right
