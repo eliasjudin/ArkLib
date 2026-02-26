@@ -155,11 +155,13 @@ private def compPolyCandidateSet [Fintype F] (k e : ℕ) (ωs : Fin n ↪ F) (f 
 private lemma mem_compPolyCandidateSet_imp [Fintype F] {k e : ℕ} {ωs : Fin n ↪ F}
     {f : Fin n → F} {p : F[X]} (hp : p ∈ compPolyCandidateSet k e ωs f) :
     p.degree < k ∧ Δ₀(f, p.eval ∘ ωs) ≤ e := by
-  unfold compPolyCandidateSet at hp
+  simp only [compPolyCandidateSet] at hp
   split at hp
-  · split at hp
-    · rcases Finset.mem_singleton.mp hp with rfl
-      exact decide_eq_true_eq.mp ‹decide (_ ∧ _) = true›
+  · next _ =>
+    split at hp
+    · next hcond =>
+      rw [Finset.mem_singleton.mp hp]
+      exact decide_eq_true_eq.mp hcond
     · simp at hp
   · simp at hp
 
