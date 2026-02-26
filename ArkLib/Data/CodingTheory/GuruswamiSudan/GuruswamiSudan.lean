@@ -11,6 +11,7 @@ import Mathlib.RingTheory.Polynomial.Basic
 import ArkLib.Data.CodingTheory.Basic
 import ArkLib.Data.CodingTheory.ReedSolomon
 import ArkLib.Data.Polynomial.Bivariate
+import ArkLib.Data.Polynomial.Interface
 
 namespace GuruswamiSudan
 
@@ -54,28 +55,35 @@ structure Condition
   /-- Multiplicity of the roots is at least r. -/
   Q_multiplicity : ∀ i, r ≤ Bivariate.rootMultiplicity Q (ωs i) (f i)
 
-/-- The finite type of polynomials of degree strictly less than `k` over a finite field `F`. -/
-noncomputable instance fintypeDegreeLT (F : Type) [CommSemiring F] [Fintype F]
-    [DecidableEq F] (k : ℕ) :
-    Fintype (Polynomial.degreeLT F k) :=
-  Fintype.ofEquiv _ (Polynomial.degreeLTEquiv F k).symm.toEquiv
+/-- Recover a polynomial from its first `k` coefficients when its degree is below `k`. -/
+private lemma polynomialOfCoeffs_coeffsOfPolynomial_of_degree_lt
+    {F : Type} [CommSemiring F] [DecidableEq F] {k : ℕ} {p : F[X]}
+    (h : p.degree < (k : WithBot ℕ)) :
+    polynomialOfCoeffs (coeffsOfPolynomial (deg := k) p) = p := by
+  ext x
+  simp only [coeff_polynomialOfCoeffs_eq_coeffs', coeffsOfPolynomial]
+  split
+  · rfl
+  · symm
+    exact Polynomial.coeff_eq_zero_of_degree_lt
+      (lt_of_lt_of_le h (by exact_mod_cast Nat.le_of_not_lt ‹_›))
 
 /-- The finset of all polynomials `p : F[X]` with `p.degree < k`, viewed as elements of `F[X]`.
-    Obtained by mapping `Finset.univ` for `degreeLT F k` through the subtype coercion. -/
-noncomputable def polynomialsDegreeLT (F : Type) [CommSemiring F] [Fintype F]
+    Constructed computably by enumerating coefficient vectors `Fin k → F`. -/
+def polynomialsDegreeLT (F : Type) [CommSemiring F] [Fintype F]
     [DecidableEq F] (k : ℕ) :
     Finset F[X] :=
-  (Finset.univ : Finset (Polynomial.degreeLT F k)).image (Subtype.val)
+  (Finset.univ : Finset (Fin k → F)).image polynomialOfCoeffs
 
 lemma mem_polynomialsDegreeLT {F : Type} [CommSemiring F] [Fintype F] [DecidableEq F]
     {k : ℕ} {p : F[X]} :
     p ∈ polynomialsDegreeLT F k ↔ p.degree < k := by
   simp only [polynomialsDegreeLT, Finset.mem_image, Finset.mem_univ, true_and]
   constructor
-  · rintro ⟨⟨q, hq⟩, rfl⟩
-    exact Polynomial.mem_degreeLT.mp hq
+  · rintro ⟨coeffs, rfl⟩
+    exact degree_polynomialOfCoeffs_deg_lt_deg
   · intro h
-    exact ⟨⟨p, Polynomial.mem_degreeLT.mpr h⟩, rfl⟩
+    exact ⟨coeffsOfPolynomial p, polynomialOfCoeffs_coeffsOfPolynomial_of_degree_lt h⟩
 
 /--
 Guruswami-Sudan decoder.
@@ -117,6 +125,41 @@ noncomputable def decoder [Fintype F] (k r D e : ℕ) (ωs : Fin n ↪ F) (f : F
     (roots Q).toList.filter (fun p ↦ decide (p.natDegree < k ∧ Δ₀(f, p.eval ∘ ωs) ≤ e)) ++ fallback
   else
     fallback
+
+/-- Computable fallback candidates: degree `< k` and distance `≤ e` from `f`. -/
+private def fallbackCandidates [Fintype F] (k e : ℕ) (ωs : Fin n ↪ F) (f : Fin n → F) :
+    Finset F[X] :=
+  (polynomialsDegreeLT F k).filter fun p ↦ decide (Δ₀(f, p.eval ∘ ωs) ≤ e)
+
+/-- Membership characterization for `fallbackCandidates`. -/
+private lemma mem_fallbackCandidates_iff [Fintype F] {k e : ℕ} {ωs : Fin n ↪ F}
+    {f : Fin n → F} {p : F[X]} :
+    p ∈ fallbackCandidates k e ωs f ↔ (p.degree < k ∧ Δ₀(f, p.eval ∘ ωs) ≤ e) := by
+  simp only [fallbackCandidates, Finset.mem_filter, decide_eq_true_eq,
+    mem_polynomialsDegreeLT]
+
+/-- Bounded root candidates from an explicit `Q`, restricted to degree `< k` and distance `≤ e`. -/
+private noncomputable def boundedRootCandidates [Fintype F] (Q : F[X][X]) (k e : ℕ)
+    (ωs : Fin n ↪ F) (f : Fin n → F) : Finset F[X] :=
+  (polynomialsDegreeLT F k).filter fun p ↦
+    decide (Q.eval p = 0 ∧ Δ₀(f, p.eval ∘ ωs) ≤ e)
+
+/-- Membership characterization for `boundedRootCandidates`. -/
+private lemma mem_boundedRootCandidates_iff [Fintype F] {Q : F[X][X]} {k e : ℕ}
+    {ωs : Fin n ↪ F} {f : Fin n → F} {p : F[X]} :
+    p ∈ boundedRootCandidates Q k e ωs f ↔
+    (p.degree < k ∧ Q.eval p = 0 ∧ Δ₀(f, p.eval ∘ ωs) ≤ e) := by
+  simp only [boundedRootCandidates, Finset.mem_filter, decide_eq_true_eq,
+    mem_polynomialsDegreeLT]
+
+/-- Every bounded-root candidate is a fallback candidate. -/
+private lemma boundedRootCandidates_subset_fallbackCandidates [Fintype F]
+    {Q : F[X][X]} {k e : ℕ} {ωs : Fin n ↪ F} {f : Fin n → F} :
+    boundedRootCandidates Q k e ωs f ⊆ fallbackCandidates k e ωs f := by
+  intro p hp
+  rw [mem_boundedRootCandidates_iff] at hp
+  rw [mem_fallbackCandidates_iff]
+  exact ⟨hp.1, hp.2.2⟩
 
 /-- A polynomial appears in the fallback list if and only if it has degree `< k` and
     distance `≤ e` from `f`. -/
