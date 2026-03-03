@@ -67,6 +67,22 @@ theorem decoder_mem_impl_dist
   :
   Δ₀(f, p.eval ∘ ωs) ≤ e := by sorry
 
+/-- Specification helper: every polynomial output by the decoder is within
+Hamming distance `e` of the received word.
+This aliases `decoder_mem_impl_dist` so downstream proofs can target a
+single decoder-correctness statement directly.
+-/
+theorem decoder_output_dist_le
+  {k r D e : ℕ}
+  (h_e : e ≤ n - Real.sqrt (k * n))
+  {ωs : Fin n ↪ F}
+  {f : Fin n → F}
+  {p : F[X]}
+  (h_in : p ∈ decoder k r D e ωs f)
+  :
+  Δ₀(f, p.eval ∘ ωs) ≤ e :=
+  decoder_mem_impl_dist (k := k) (r := r) (D := D) (e := e) h_e h_in
+
 /-- If a codeword is e-far from the received message it appears in the output of
 the decoder.
 -/
